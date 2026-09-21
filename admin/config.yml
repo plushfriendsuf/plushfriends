@@ -1,0 +1,65 @@
+-- 1. Skapa tabellen för produkter
+CREATE TABLE IF NOT EXISTS public.products (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    price NUMERIC NOT NULL DEFAULT 0,
+    category TEXT DEFAULT 'classic',
+    "desc" TEXT DEFAULT '',
+    icon TEXT DEFAULT '',
+    bg TEXT DEFAULT 'from-pink-100 to-rose-100',
+    image_url TEXT DEFAULT '',
+    coming_soon BOOLEAN DEFAULT false,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Aktivera säkerhet (Row Level Security)
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+
+-- 3. Ta bort gamla policys om de redan finns
+DROP POLICY IF EXISTS "Alla kan visa aktiva produkter" ON public.products;
+DROP POLICY IF EXISTS "Administratörer kan hantera allt" ON public.products;
+
+-- 4. Skapa RLS-policys för tabellen
+CREATE POLICY "Alla kan visa aktiva produkter"
+ON public.products
+FOR SELECT
+USING (active = true);
+
+CREATE POLICY "Administratörer kan hantera allt"
+ON public.products
+FOR ALL
+TO authenticated
+USING (true)
+WITH CHECK (true);
+
+-- 5. Skapa lagringsplats (Storage Bucket) för produktbilder
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('product-images', 'product-images', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- 6. Ta bort gamla policys för lagringshinken om de finns
+DROP POLICY IF EXISTS "Offentliga bilder kan visas av alla" ON storage.objects;
+DROP POLICY IF EXISTS "Administratörer kan ladda upp bilder" ON storage.objects;
+
+-- 7. Skapa policys för bildlagringen
+CREATE POLICY "Offentliga bilder kan visas av alla"
+ON storage.objects
+FOR SELECT
+USING (bucket_id = 'product-images');
+
+CREATE POLICY "Administratörer kan ladda upp bilder"
+ON storage.objects
+FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'product-images');
+
+-- 8. Lägg till alla dina startprodukter utan emojis
+INSERT INTO public.products (name, price, category, "desc", icon, bg, coming_soon, active) VALUES
+('Spöket Boo', 120, 'halloween', 'Litet sött Halloween-spöke', '', 'from-purple-100 to-pink-100', false, true),
+('Pumpan Patch', 120, 'halloween', 'Mjuk och glad höstpumpa', '', 'from-orange-100 to-amber-100', false, true),
+('Citrus Sid (Orange Candy)', 120, 'halloween', 'Söt godis-figur med apelsinsmak', '', 'from-amber-100 to-yellow-100', false, true),
+('Bärta Berry (Rosa Candy)', 120, 'halloween', 'Rosa hallongodis med rosett', '', 'from-pink-100 to-rose-100', false, true),
+('Himmel-Nisse (Blå Candy)', 120, 'halloween', 'Blåbärsgodis med molndetalj', '', 'from-sky-100 to-blue-100', false, true),
+('Lilla Rosa Kaninen', 149, 'classic', 'Klassisk kanin i mjukt sammet', '', 'from-pink-100 to-fuchsia-100', false, true),
+('Nallebjörnen Barnaby', 149, 'classic', 'Tidlös och kramgod nallebjörn', '', 'from-amber-50 to-orange-100', false, true);
