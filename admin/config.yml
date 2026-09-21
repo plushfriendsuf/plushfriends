@@ -16,3 +16,4 @@ collections:
       - { label: "Beskrivning", name: "body", widget: "markdown" }
       - { label: "Pris", name: "price", widget: "number" }
       - { label: "Bild", name: "image", widget: "image" }
+- { label: "Lagersaldo", name: "stock", widget: "number" }
