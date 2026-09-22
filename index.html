@@ -310,7 +310,31 @@
             await loadProducts();
         });
 
+        // Produkter som läggs in via /admin (Decap CMS) sparas i content/products.json
+        async function loadCmsProducts() {
+            try {
+                const res = await fetch('/content/products.json', { cache: 'no-store' });
+                if (!res.ok) return [];
+                const json = await res.json();
+                return (json.products || []).map(p => ({
+                    id: `cms-${p.id || p.title}`,
+                    name: p.title,
+                    desc: p.description || '',
+                    price: Number(p.price) || 0,
+                    stock: p.stock === undefined || p.stock === null ? null : Number(p.stock),
+                    category: p.category || 'classic',
+                    image_url: p.image || '',
+                    coming_soon: Boolean(p.coming_soon),
+                    active: true
+                }));
+            } catch (err) {
+                console.error(err);
+                return [];
+            }
+        }
+
         async function loadProducts() {
+            const cmsProducts = await loadCmsProducts();
             try {
                 const { data, error } = await supabaseClient
                     .from('products')
@@ -328,7 +352,12 @@
                 console.error(err);
                 products = fallbackProducts;
             }
+            products = [...cmsProducts, ...products];
             renderProducts(products);
+        }
+
+        function isSoldOut(product) {
+            return product.stock !== undefined && product.stock !== null && Number(product.stock) <= 0;
         }
 
         function productVisual(product) {
@@ -345,12 +374,20 @@
             items.forEach(product => {
                 const card = document.createElement('div');
                 card.className = 'bg-white rounded-3xl p-5 cute-card-shadow border border-plush-pink/40 flex flex-col justify-between hover:-translate-y-1 transition-all duration-300';
+                const soldOut = !product.coming_soon && isSoldOut(product);
                 const status = product.coming_soon
                     ? `<span class="absolute top-3 left-3 bg-plush-pink-dark text-white text-xs font-bold px-2.5 py-1 rounded-full">🔜 Kommer snart</span>`
-                    : '';
+                    : soldOut
+                        ? `<span class="absolute top-3 left-3 bg-gray-700 text-white text-xs font-bold px-2.5 py-1 rounded-full">Slutsåld</span>`
+                        : '';
                 const categoryLabel = product.category === 'halloween' ? '🎃 Halloween' : '🌸 Klassiker';
+                const stockLabel = !product.coming_soon && !soldOut && product.stock !== undefined && product.stock !== null
+                    ? `<span class="text-xs text-plush-text-muted">${Number(product.stock)} i lager</span>`
+                    : '';
                 const button = product.coming_soon
                     ? `<button disabled class="w-full bg-gray-100 text-gray-400 font-bold py-2.5 rounded-xl text-xs font-cute">Kommer snart</button>`
+                    : soldOut
+                    ? `<button disabled class="w-full bg-gray-100 text-gray-400 font-bold py-2.5 rounded-xl text-xs font-cute">Slutsåld</button>`
                     : `<button onclick="addToCart('${escapeHtml(String(product.id))}')" class="w-full bg-plush-pink hover:bg-plush-pink-dark text-plush-pink-dark hover:text-white font-bold py-2.5 rounded-xl text-xs font-cute transition-all">+ Lägg till</button>`;
 
                 card.innerHTML = `
@@ -368,6 +405,7 @@
                     <div class="mt-6 pt-4 border-t border-plush-pink/30">
                         <div class="flex items-center justify-between mb-3">
                             <span class="text-base font-bold font-cute text-plush-pink-dark">${Number(product.price).toFixed(0)} kr</span>
+                            ${stockLabel}
                         </div>
                         ${button}
                     </div>
@@ -397,10 +435,12 @@
 
         function addToCart(productId) {
             const existing = cart.find(item => String(item.id) === String(productId));
-            if (existing) existing.qty += 1;
-            else {
-                const prod = products.find(p => String(p.id) === String(productId));
-                if (!prod) return;
+            const prod = products.find(p => String(p.id) === String(productId));
+            if (!prod || isSoldOut(prod)) return;
+            if (existing) {
+                if (prod.stock != null && existing.qty >= Number(prod.stock)) { alert(`Tyvärr finns bara ${prod.stock} st i lager ♡`); return; }
+                existing.qty += 1;
+            } else {
                 cart.push({ ...prod, qty: 1 });
             }
             updateCartUI();
@@ -410,6 +450,7 @@
         function updateQuantity(productId, delta) {
             const item = cart.find(i => String(i.id) === String(productId));
             if (item) {
+                if (delta > 0 && item.stock != null && item.qty >= Number(item.stock)) { alert(`Tyvärr finns bara ${item.stock} st i lager ♡`); return; }
                 item.qty += delta;
                 if (item.qty <= 0) cart = cart.filter(i => String(i.id) !== String(productId));
             }

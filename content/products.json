@@ -1,0 +1,14 @@
+{
+  "products": [
+    {
+      "id": "svart-halloween-katt",
+      "title": "Svart Halloween katt",
+      "description": "Svart Katt från Halloween kollektionen. Limited Edition",
+      "price": 130,
+      "stock": 4,
+      "category": "halloween",
+      "image": "/images/img_5519.jpeg",
+      "coming_soon": false
+    }
+  ]
+}
